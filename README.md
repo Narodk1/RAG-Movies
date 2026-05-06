@@ -1,4 +1,4 @@
-# Cine_RAG — Assistant de Recommandation de Films
+# RAG — Assistant de Recommandation de Films
 
 Système **RAG (Retrieval-Augmented Generation)** pour recommander des films à partir du dataset TMDB 5000, en utilisant **FAISS** pour la recherche vectorielle et **Groq (Llama 3.3 70B)** pour la génération de réponses.
 
