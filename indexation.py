@@ -3,7 +3,11 @@ import json
 from os import name 
 import pandas as pd
 import json
+
 DATA_PATH = "data/tmdb_5000_movies.csv"
+
+CHUNK_SIZE = 600
+CHUNK_OVERLAP = 80
 
 
 def load_and_clean_data(path: str) -> pd.DataFrame:
@@ -43,8 +47,33 @@ def create_textdescriptions(df: pd.DataFrame) -> list[str]:
     return descriptions
 
 
+def chunker(texte: str, taille_max=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    chunks = []
+    debut = 0
+    while debut < len(texte):
+        fin = debut + taille_max
+        chunks.append(texte[debut:fin])
+        if fin >= len(texte):
+            break
+        debut = fin - overlap
+    return chunks
+
+
+def chunker_descriptions(descriptions):
+    all_chunks = []
+    mapping = []
+
+    for i, desc in enumerate(descriptions):
+        chunks = chunker(desc)
+        all_chunks.extend(chunks)
+        mapping.extend([i] * len(chunks))
+
+    return all_chunks, mapping
+
+
 if name == "main":
     df = load_and_clean_data(DATA_PATH)
     descriptions = create_textdescriptions(df)
 
-    print(descriptions[0])
+    chunks, mapping = chunker_descriptions(descriptions)
+    print(len(chunks))
