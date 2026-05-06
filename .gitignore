@@ -3,3 +3,15 @@ venv/
 data/
 __pycache__/
 .DS_Store
+# Fichiers générés
+data/
+faiss_index/
+__pycache__/
+*.pyc
+
+# Environnement
+.env
+venv/
+
+# Mac
+.DS_Store
