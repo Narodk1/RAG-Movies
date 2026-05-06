@@ -1,8 +1,12 @@
+import faiss
+import numpy as np
 import pandas as pd
 import json
 from os import name 
 import pandas as pd
 import json
+
+from sentence_transformers import SentenceTransformer
 
 DATA_PATH = "data/tmdb_5000_movies.csv"
 
@@ -70,7 +74,27 @@ def chunker_descriptions(descriptions):
 
     return all_chunks, mapping
 
+def creer_index_faiss(vecteurs):
+    dim = vecteurs.shape[1]
+    index = faiss.IndexFlatL2(dim)
+    index.add(vecteurs)
+    return index
 
+
+if name == "main":
+    df = load_and_clean_data(DATA_PATH)
+    descriptions = create_textdescriptions(df)
+
+    chunks, mapping = chunker_descriptions(descriptions)
+
+    model = SentenceTransformer("all-mpnet-base-v2")
+    embeddings = model.encode(chunks)
+
+    embeddings = np.array(embeddings).astype("float32")
+
+    index = creer_index_faiss(embeddings)
+
+    print("Index créé :", index.ntotal)
 if name == "main":
     df = load_and_clean_data(DATA_PATH)
     descriptions = create_textdescriptions(df)
