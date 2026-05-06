@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cine_RAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #080808;
+      --surface:     #0f0f0f;
+      --surface2:    #161616;
+      --border:      #2a2a2a;
+      --text:        #e8e0d4;
+      --text-dim:    #7a7067;
+      --text-muted:  #3d3830;
+      --gold:        #c9a84c;
+      --gold-dim:    #7a5f28;
+      --red:         #8b2020;
+      --red-bright:  #c0392b;
+      --green:       #2d6a4f;
+      --green-bright:#52b788;
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-body:    'Cormorant Garamond', Georgia, serif;
+      --font-mono:    'DM Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 18px;
+      line-height: 1.7;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.035;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────── */
+    header {
+      grid-column: 1 / -1;
+      padding: 28px 40px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 24px;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 900;
+      font-style: italic;
+      color: var(--gold);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .logo span {
+      color: var(--text-dim);
+      font-weight: 400;
+      font-style: normal;
+      font-size: 0.9rem;
+      font-family: var(--font-mono);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-left: 4px;
+    }
+
+    .header-status {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.4s;
+    }
+    .status-dot.online  { background: var(--green-bright); box-shadow: 0 0 6px var(--green-bright); }
+    .status-dot.error   { background: var(--red-bright); }
+    .status-dot.loading { background: var(--gold); animation: pulse 1s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .sidebar-section h3 {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    /* Language toggle */
+    .lang-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 10px 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+
+    .lang-btn.active {
+      background: var(--gold);
+      color: var(--bg);
+      font-weight: 500;
+    }
+
+    .lang-btn:hover:not(.active) {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    /* History */
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      padding: 8px 10px;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-item:hover {
+      border-color: var(--border);
+      color: var(--text);
+      background: var(--surface2);
+    }
+
+    .history-empty {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .reset-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 3px;
+      width: 100%;
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .reset-btn:hover {
+      border-color: var(--red-bright);
+      color: var(--red-bright);
+    }
+
+    /* Tips */
+    .tips-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tip {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      padding-left: 12px;
+      border-left: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      line-height: 1.5;
+    }
+
+    .tip:hover {
+      color: var(--text-dim);
+      border-color: var(--gold-dim);
+    }
+
+    /* ── Main content ─────────────────────────────────────────────── */
+    .main {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Chat area */
+    .chat-area {
+      flex: 1;
+      padding: 40px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      overflow-y: auto;
+      max-height: calc(100vh - 80px - 140px);
+    }
+
+    /* Welcome screen */
+    .welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 50vh;
+      text-align: center;
+      gap: 20px;
+      animation: fadeIn 0.8s ease;
+    }
+
+    .welcome-icon {
+      font-size: 4rem;
+      opacity: 0.15;
+      filter: grayscale(1);
+    }
+
+    .welcome h2 {
+      font-family: var(--font-display);
+      font-size: 2.4rem;
+      font-weight: 400;
+      font-style: italic;
+      color: var(--text-dim);
+      line-height: 1.2;
+    }
+
+    .welcome p {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 400px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* Message bubble */
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: slideUp 0.4s ease;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    .message-user {
+      align-items: flex-end;
+    }
+
+    .message-user .bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 2px 12px 12px 12px;
+      padding: 14px 20px;
+      max-width: 70%;
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      color: var(--text);
+    }
+
+    .message-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      padding: 0 4px;
+    }
+
+    .message-assistant .bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--gold-dim);
+      border-radius: 12px 12px 12px 2px;
+      padding: 24px 28px;
+      max-width: 85%;
+      position: relative;
+    }
+
+    .bubble-content {
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      line-height: 1.75;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    /* Confidence warning */
+    .confidence-warning {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(139, 32, 32, 0.1);
+      border: 1px solid rgba(192, 57, 43, 0.3);
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: #e07070;
+      margin-bottom: 12px;
+    }
+
+    /* Film cards */
+    .film-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .film-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .film-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--gold-dim), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .film-card:hover { border-color: var(--gold-dim); }
+    .film-card:hover::before { opacity: 1; }
+
+    .film-card-title {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+      margin-bottom: 6px;
+    }
+
+    .film-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .film-rating {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+    }
+
+    .film-lang {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      padding: 1px 5px;
+      border: 1px solid var(--text-muted);
+      border-radius: 2px;
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--gold-dim);
+      border-radius: 12px 12px 12px 2px;
+      width: fit-content;
+      animation: slideUp 0.3s ease;
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .typing-dots span {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--gold-dim);
+      animation: bounce 1.2s infinite;
+    }
+
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%,80%,100% { transform: translateY(0); opacity: 0.4; }
+      40%          { transform: translateY(-5px); opacity: 1; }
+    }
+
+    .typing-text {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Input zone ───────────────────────────────────────────────── */
+    .input-zone {
+      border-top: 1px solid var(--border);
+      padding: 24px 48px 28px;
+      background: var(--bg);
+      position: sticky;
+      bottom: 0;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .input-field {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      padding: 14px 18px;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s;
+      min-height: 52px;
+      max-height: 140px;
+      line-height: 1.5;
+    }
+
+    .input-field::placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+      font-family: var(--font-body);
+    }
+
+    .input-field:focus { border-color: var(--gold-dim); }
+
+    .send-btn {
+      background: var(--gold);
+      border: none;
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 14px 22px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      align-self: flex-end;
+      height: 52px;
+    }
+
+    .send-btn:hover { background: #dbb85a; }
+    .send-btn:disabled { background: var(--gold-dim); cursor: not-allowed; opacity: 0.5; }
+
+    .input-hint {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Score badge ─────────────────────────────────────────────── */
+    .score-badge {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      padding: 3px 8px;
+      border-radius: 2px;
+      letter-spacing: 0.05em;
+      position: absolute;
+      top: 12px;
+      right: 14px;
+    }
+
+    .score-good  { background: rgba(45,106,79,0.2); color: var(--green-bright); border: 1px solid rgba(82,183,136,0.3); }
+    .score-bad   { background: rgba(139,32,32,0.2); color: #e07070; border: 1px solid rgba(192,57,43,0.3); }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .chat-area, .input-zone { padding-left: 20px; padding-right: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">Cine<em>RAG</em><span>// assistant</span></div>
+    <div class="header-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Connexion...</span>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <h3>Langue</h3>
+      <div class="lang-toggle">
+        <button class="lang-btn" id="btnFr" onclick="setLang('fr')">🇫🇷 Français</button>
+        <button class="lang-btn active" id="btnEn" onclick="setLang('en')">🌐 International</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Historique</h3>
+      <div class="history-list" id="historyList">
+        <span class="history-empty">Aucune question posée</span>
+      </div>
+      <button class="reset-btn" onclick="resetHistorique()">↺ Vider l'historique</button>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Inspirations</h3>
+      <div class="tips-list">
+        <div class="tip" onclick="useTip(this)">Un thriller psychologique avec un retournement inattendu</div>
+        <div class="tip" onclick="useTip(this)">Film d'animation familial sorti après 2010</div>
+        <div class="tip" onclick="useTip(this)">Science-fiction philosophique sur l'intelligence artificielle</div>
+        <div class="tip" onclick="useTip(this)">Un film comme Inception mais plus accessible</div>
+        <div class="tip" onclick="useTip(this)">Comédie romantique légère pour une soirée détente</div>
+        <div class="tip" onclick="useTip(this)">Drame historique épique, années 1940</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <div class="chat-area" id="chatArea">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">🎬</div>
+        <h2>Que voulez-vous<br/>regarder ce soir ?</h2>
+        <p>Posez votre question en langage naturel.<br/>Notre expert cinéphile fouille 5 000 films pour vous.</p>
+      </div>
+    </div>
+
+    <div class="input-zone">
+      <div class="input-wrapper">
+        <textarea
+          class="input-field"
+          id="inputField"
+          placeholder="Je cherche un film d'horreur atmosphérique, années 80…"
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="envoyerQuestion()">Envoyer →</button>
+      </div>
+      <div class="input-hint">Entrée pour envoyer · Shift+Entrée pour sauter une ligne</div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ── État ─────────────────────────────────────────────────────────
+  const API_URL   = "http://localhost:5001";
+  let langue      = "en";
+  let historique  = [];  // [{role, content}, ...]
+  let isLoading   = false;
+
+  // ── Santé du backend ─────────────────────────────────────────────
+  async function checkHealth() {
+    const dot  = document.getElementById("statusDot");
+    const text = document.getElementById("statusText");
+    dot.className = "status-dot loading";
+    text.textContent = "Connexion...";
+    try {
+      const res  = await fetch(`${API_URL}/health`);
+      const data = await res.json();
+      dot.className  = "status-dot online";
+      text.textContent = `${data.films.toLocaleString()} films indexés`;
+    } catch {
+      dot.className  = "status-dot error";
+      text.textContent = "Backend hors ligne";
+    }
+  }
+
+  // ── Langue ───────────────────────────────────────────────────────
+  function setLang(l) {
+    langue = l;
+    document.getElementById("btnFr").classList.toggle("active", l === "fr");
+    document.getElementById("btnEn").classList.toggle("active", l === "en");
+  }
+
+  // ── Envoi ────────────────────────────────────────────────────────
+  async function envoyerQuestion() {
+    const input = document.getElementById("inputField");
+    const question = input.value.trim();
+    if (!question || isLoading) return;
+
+    isLoading = true;
+    document.getElementById("sendBtn").disabled = true;
+
+    // Cacher le welcome
+    const welcome = document.getElementById("welcome");
+    if (welcome) welcome.remove();
+
+    // Afficher la question
+    appendMessage("user", question);
+    historique.push({ role: "user", content: question });
+    updateHistory(question);
+
+    input.value = "";
+    input.style.height = "auto";
+
+    // Typing indicator
+    const typingId = showTyping();
+
+    try {
+      const res  = await fetch(`${API_URL}/search`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, langue, historique }),
+      });
+      const data = await res.json();
+
+      removeTyping(typingId);
+
+      if (data.error) {
+        appendError(data.error);
+      } else {
+        historique.push({ role: "assistant", content: data.reponse });
+        appendAssistantMessage(data);
+      }
+    } catch (err) {
+      removeTyping(typingId);
+      appendError("Impossible de joindre le backend. Vérifiez que app.py est lancé.");
+    }
+
+    isLoading = false;
+    document.getElementById("sendBtn").disabled = false;
+    input.focus();
+  }
+
+  // ── DOM helpers ──────────────────────────────────────────────────
+  function appendMessage(role, content) {
+    const area = document.getElementById("chatArea");
+    const div  = document.createElement("div");
+    div.className = `message message-${role}`;
+    div.innerHTML = `
+      <div class="message-label">${role === "user" ? "Vous" : "Expert"}</div>
+      <div class="bubble"><div class="bubble-content">${escHtml(content)}</div></div>
+    `;
+    area.appendChild(div);
+    scrollBottom();
+  }
+
+  function appendAssistantMessage(data) {
+    const area = document.getElementById("chatArea");
+    const div  = document.createElement("div");
+    div.className = "message message-assistant";
+
+    const scoreClass = data.low_confidence ? "score-bad" : "score-good";
+    const scoreLabel = `L2: ${data.score.toFixed(3)}`;
+
+    const warning = data.low_confidence
+      ? `<div class="confidence-warning">⚠ Confiance faible — les résultats peuvent être approximatifs</div>`
+      : "";
+
+    // Film cards
+    let cards = "";
+    if (data.films && data.films.length) {
+      cards = `<div class="film-cards">` +
+        data.films.map(f => `
+          <div class="film-card">
+            <div class="film-card-title">${escHtml(f.title)}</div>
+            <div class="film-card-meta">
+              <span class="film-rating">★ ${f.rating}</span>
+              <span class="film-lang">${f.lang}</span>
+            </div>
+          </div>
+        `).join("") +
+        `</div>`;
+    }
+
+    div.innerHTML = `
+      <div class="message-label">Expert cinéphile</div>
+      <div class="bubble">
+        <span class="score-badge ${scoreClass}">${scoreLabel}</span>
+        ${warning}
+        <div class="bubble-content">${escHtml(data.reponse)}</div>
+        ${cards}
+      </div>
+    `;
+    area.appendChild(div);
+    scrollBottom();
+  }
+
+  function appendError(msg) {
+    const area = document.getElementById("chatArea");
+    const div  = document.createElement("div");
+    div.className = "message message-assistant";
+    div.innerHTML = `
+      <div class="message-label">Erreur</div>
+      <div class="bubble" style="border-left-color: var(--red-bright)">
+        <div class="bubble-content" style="color:#e07070">${escHtml(msg)}</div>
+      </div>
+    `;
+    area.appendChild(div);
+    scrollBottom();
+  }
+
+  function showTyping() {
+    const area = document.getElementById("chatArea");
+    const id   = "typing-" + Date.now();
+    const div  = document.createElement("div");
+    div.className = "message message-assistant";
+    div.id = id;
+    div.innerHTML = `
+      <div class="message-label">Expert cinéphile</div>
+      <div class="typing-indicator">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        <span class="typing-text">Analyse en cours…</span>
+      </div>
+    `;
+    area.appendChild(div);
+    scrollBottom();
+    return id;
+  }
+
+  function removeTyping(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function scrollBottom() {
+    const area = document.getElementById("chatArea");
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ── Historique sidebar ───────────────────────────────────────────
+  function updateHistory(q) {
+    const list = document.getElementById("historyList");
+    // Supprimer le placeholder
+    list.querySelectorAll(".history-empty").forEach(el => el.remove());
+
+    const item = document.createElement("div");
+    item.className = "history-item";
+    item.textContent = q;
+    item.title = q;
+    item.onclick = () => {
+      document.getElementById("inputField").value = q;
+    };
+    list.prepend(item);
+  }
+
+  function resetHistorique() {
+    historique = [];
+    document.getElementById("historyList").innerHTML =
+      `<span class="history-empty">Aucune question posée</span>`;
+  }
+
+  // ── Inspirations ─────────────────────────────────────────────────
+  function useTip(el) {
+    document.getElementById("inputField").value = el.textContent.trim();
+    document.getElementById("inputField").focus();
+  }
+
+  // ── Input helpers ────────────────────────────────────────────────
+  function handleKey(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      envoyerQuestion();
+    }
+  }
+
+  function autoResize(el) {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 140) + "px";
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────
+  checkHealth();
+  setInterval(checkHealth, 30000);
+  document.getElementById("inputField").focus();
+</script>
+</body>
+</html>
