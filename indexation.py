@@ -1,11 +1,12 @@
 import pandas as pd
 import json
 from os import name 
+import pandas as pd
+import json
 DATA_PATH = "data/tmdb_5000_movies.csv"
 
 
 def load_and_clean_data(path: str) -> pd.DataFrame:
-    print("Chargement des données...")
     df = pd.read_csv(path)
 
     df = df.sort_values('vote_count', ascending=False).reset_index(drop=True)
@@ -28,6 +29,22 @@ def _extract_genres(genre_str: str) -> str:
         return ""
 
 
+def create_textdescriptions(df: pd.DataFrame) -> list[str]:
+    descriptions = []
+    for _, row in df.iterrows():
+        text = (
+            f"Title: {row['title']}. "
+            f"Genres: {row['genres_cleaned']}. "
+            f"Date: {row['release_date']}. "
+            f"Rating: {row['vote_average']}/10. "
+            f"Overview: {row['overview']}"
+        )
+        descriptions.append(text)
+    return descriptions
+
+
 if name == "main":
     df = load_and_clean_data(DATA_PATH)
-    print(df.head())
+    descriptions = create_textdescriptions(df)
+
+    print(descriptions[0])
