@@ -79,3 +79,64 @@ def rechercher(question: str, modele_emb, index, metadata: dict,
             break
 
     return final_results[:5], best_score
+
+def main():
+    try:
+        index, metadata = charger_index(INDEX_PATH, METADATA_PATH)
+    except FileNotFoundError:
+        print("❌ Index non trouvé. Lancez d'abord : python3 indexation.py")
+        return
+
+    print(f"Chargement du modèle d'embedding '{MODEL_NAME}'...")
+    model_emb = SentenceTransformer(MODEL_NAME, device="cpu")
+
+    print("\n🎬  Cine_RAG — Assistant de recommandation de films")
+    print("     Tapez 'q' pour quitter · 'reset' pour vider l'historique\n")
+
+    historique: list[dict] = []
+
+    while True:
+        print("-" * 50)
+
+        choix_langue = input(
+            "🌐 Langue : (1) Français  (2) International / VO  [Défaut: 2] : "
+        ).strip()
+        lang_pref = "fr" if choix_langue == "1" else "en"
+
+        query = input("🤔 Que voulez-vous regarder ? (q=quitter, reset=historique) : ").strip()
+
+        if query.lower() in ("q", "quit", "exit"):
+            print("À bientôt !")
+            break
+        if query.lower() == "reset":
+            historique = []
+            print("🔄 Historique vidé.\n")
+            continue
+        if not query:
+            continue
+
+        label_langue = "Français" if lang_pref == "fr" else "International"
+        print(f"🔍 Recherche vectorielle ({label_langue})...")
+        films, best_score = rechercher(query, model_emb, index, metadata, lang_pref)
+
+        if best_score > SCORE_THRESHOLD:
+            print(
+                f"⚠️  Score de similarité faible ({best_score:.3f} > seuil {SCORE_THRESHOLD})."
+                " Les résultats peuvent être peu pertinents."
+            )
+        else:
+            print(f"   Score de similarité : {best_score:.3f} ✓")
+
+        historique.append({"role": "user", "content": query})
+
+        print("🤖 Consultation de l'expert Groq (avec historique)...")
+        reponse = generer_reponse_avec_historique(historique, films)
+
+        historique.append({"role": "assistant", "content": reponse})
+
+        print("\n" + "=" * 60)
+        print(reponse)
+        print("=" * 60 + "\n")
+
+if __name__ == "__main__":
+    main()
